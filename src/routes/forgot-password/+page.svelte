@@ -1,51 +1,47 @@
 <script lang="ts">
-	import { PUBLIC_API_URL } from '$env/static/public';
-	import ValidateInput from '$lib/components/forms/ValidateInput.svelte';
-	import { validateEmail } from '$lib/utils/Validators';
+	import { api } from '$lib/services/api';
+	import { superForm, defaults } from 'sveltekit-superforms';
+	import { zod } from 'sveltekit-superforms/adapters';
+	import { forgotPasswordSchema } from '$lib/schemas/auth';
+	import Input from '$lib/components/forms/Input.svelte';
 	import { CircleAlert, CircleCheck, ArrowLeft, Mail } from 'lucide-svelte';
 
-	let email = $state('');
-	let emailError = $state('');
+	const { form, errors, constraints, enhance } = superForm(
+		defaults({ email: '' }, zod(forgotPasswordSchema)),
+		{
+			SPA: true,
+			validators: zod(forgotPasswordSchema),
+			onUpdate: async ({ form: f }) => {
+				if (f.valid) {
+					await handleRecover(f.data);
+				}
+			}
+		}
+	);
 
-	// Estados de controle da UI
 	let errorMessage = $state('');
 	let successMessage = $state(false);
 	let isLoading = $state(false);
 
-	async function handleRecover(e: Event) {
-		e.preventDefault();
-
-		emailError = '';
+	async function handleRecover(data: typeof $form) {
 		errorMessage = '';
-
-		if (!email) {
-			emailError = 'O e-mail é obrigatório';
-		} else if (!validateEmail(email)) {
-			emailError = 'Por favor, informe um e-mail válido';
-		}
-
-		if (emailError) return;
-
 		isLoading = true;
 
 		try {
-			const res = await fetch(`${PUBLIC_API_URL}/auth/forgot-password`, {
+			const res = await api('/auth/forgot-password', {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ email })
+				body: JSON.stringify(data)
 			});
 
 			if (!res.ok) {
-				const data = await res.json();
-				errorMessage = data.message || 'Erro ao tentar recuperar senha.';
-				return;
+				const resData = await res.json();
+				throw new Error(resData.message || 'Erro ao recuperar senha.');
 			}
 
-			// Sucesso!
 			successMessage = true;
-		} catch (err) {
+		} catch (err: any) {
 			console.error(err);
-			errorMessage = 'Não foi possível conectar ao servidor.';
+			errorMessage = err.message || 'Falha na conexão.';
 		} finally {
 			isLoading = false;
 		}
@@ -82,8 +78,8 @@
 							<CircleCheck class="text-hunt-purple-400 h-10 w-10" />
 							<h3 class="text-hunt-light-600 font-semibold">E-mail enviado!</h3>
 							<p class="text-hunt-light-400 text-sm">
-								Se uma conta existir para <strong class="text-hunt-purple-300">{email}</strong>,
-								você receberá um link para redefinir sua senha em instantes.
+								Se uma conta existir para <strong class="text-hunt-purple-300">{$form.email}</strong
+								>, você receberá um link para redefinir sua senha em instantes.
 							</p>
 						</div>
 					</div>
@@ -97,21 +93,20 @@
 					</a>
 				</div>
 			{:else}
-				<form class="space-y-6" onsubmit={handleRecover} autocomplete="off">
-					<ValidateInput
+				<form class="space-y-8" use:enhance method="POST" novalidate>
+					<Input
 						label="E-mail cadastrado"
 						name="email"
 						type="email"
 						placeholder="email@exemplo.com"
-						validate={validateEmail}
-						errorMessage="E-mail inválido"
-						bind:value={email}
-						bind:error={emailError}
+						bind:value={$form.email}
+						error={$errors.email}
+						{...$constraints.email}
 					>
 						{#snippet icon()}
 							<Mail class="text-hunt-light-600 h-4 w-4" />
 						{/snippet}
-					</ValidateInput>
+					</Input>
 
 					{#if errorMessage}
 						<div

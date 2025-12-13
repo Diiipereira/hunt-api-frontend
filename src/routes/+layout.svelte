@@ -2,7 +2,7 @@
 	import '../app.css';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
-	import { auth } from '$lib/stores/auth';
+	import { authState } from '$lib/stores/auth.svelte';
 	import { browser } from '$app/environment';
 	import ToastContainer from '$lib/components/ToastContainer.svelte';
 	import { onMount } from 'svelte';
@@ -20,7 +20,7 @@
 
 	$effect(() => {
 		if (browser) {
-			const isAuthenticated = $auth.isAuthenticated;
+			const isAuthenticated = authState.isAuthenticated;
 			const currentPath = page.url.pathname;
 			const publicRoutes = ['/signin', '/signup', '/forgot-password', '/reset-password'];
 

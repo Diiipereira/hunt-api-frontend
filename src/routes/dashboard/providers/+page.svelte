@@ -9,12 +9,13 @@
 		Pencil,
 		Power
 	} from 'lucide-svelte';
-	import { onMount } from 'svelte';
 	import { PUBLIC_API_URL } from '$env/static/public';
-
 	import { flip } from 'svelte/animate';
 	import { fade, scale } from 'svelte/transition';
 	import { ToastService } from '$lib/stores/toast.svelte';
+	import { api } from '$lib/services/api';
+
+	let { data } = $props();
 
 	interface Provider {
 		id: string | number;
@@ -24,8 +25,14 @@
 		slug?: string;
 	}
 
-	let providers = $state<Provider[]>([]);
-	let isLoading = $state(true);
+	let providers = $state<Provider[]>(
+		data.providers.map((p: any) => ({
+			...p,
+			gameCount: p._count?.slots ?? p.gameCount ?? 0
+		}))
+	);
+
+	let isLoading = $state(false);
 	let searchQuery = $state('');
 	let sortBy = $state<'name' | 'count'>('name');
 
@@ -34,10 +41,6 @@
 	let isProviderActive = $state(true);
 	let isCreating = $state(false);
 	let editingProvider = $state<Provider | null>(null);
-
-	onMount(async () => {
-		await fetchProviders();
-	});
 
 	function validateName(name: string): string | null {
 		if (!name || name.trim().length < 2) {
@@ -64,32 +67,6 @@
 		showCreateModal = true;
 	}
 
-	async function fetchProviders() {
-		try {
-			const token = localStorage.getItem('token');
-			const response = await fetch(`${PUBLIC_API_URL}/providers`, {
-				method: 'GET',
-				headers: {
-					Authorization: `Bearer ${token}`,
-					'Content-Type': 'application/json'
-				}
-			});
-
-			if (!response.ok) throw new Error('Falha ao buscar provedoras');
-
-			const data = await response.json();
-			const rawData = Array.isArray(data) ? data : data.data || [];
-			providers = rawData.map((p: any) => ({
-				...p,
-				gameCount: p._count.slots ?? p.gameCount ?? 0
-			}));
-		} catch (error) {
-			console.error('Erro ao carregar provedoras:', error);
-		} finally {
-			isLoading = false;
-		}
-	}
-
 	async function handleCreateProvider() {
 		const validationError = validateName(newProviderName);
 		if (validationError) {
@@ -98,15 +75,15 @@
 		}
 		isCreating = true;
 		try {
-			const token = localStorage.getItem('token');
-			const response = await fetch(`${PUBLIC_API_URL}/providers`, {
+			const response = await api('/providers', {
 				method: 'POST',
-				headers: { Authorization: `Bearer ${token}`, 'Content-type': 'application/json' },
 				body: JSON.stringify({ name: newProviderName })
 			});
+
 			if (!response.ok) throw new Error('Falha ao criar');
 			const newProv = await response.json();
 			const added = newProv.data || newProv;
+
 			providers = [...providers, { ...added, active: true }];
 			ToastService.success('Provedora adicionada!');
 			showCreateModal = false;
@@ -127,14 +104,11 @@
 		}
 
 		isCreating = true;
-		const token = localStorage.getItem('token');
 		let hasError = false;
-
 		try {
 			if (newProviderName !== editingProvider.name) {
-				const resName = await fetch(`${PUBLIC_API_URL}/providers/${editingProvider.id}`, {
+				const resName = await api(`/providers/${editingProvider.id}`, {
 					method: 'PATCH',
-					headers: { Authorization: `Bearer ${token}`, 'Content-type': 'application/json' },
 					body: JSON.stringify({ name: newProviderName })
 				});
 				if (!resName.ok) throw new Error('Falha ao atualizar nome');
@@ -142,18 +116,13 @@
 
 			if (isProviderActive !== editingProvider.active) {
 				if (isProviderActive) {
-					const resActive = await fetch(
-						`${PUBLIC_API_URL}/providers/${editingProvider.id}/activate`,
-						{
-							method: 'PATCH',
-							headers: { Authorization: `Bearer ${token}` }
-						}
-					);
+					const resActive = await api(`/providers/${editingProvider.id}/activate`, {
+						method: 'PATCH'
+					});
 					if (!resActive.ok) throw new Error('Falha ao reativar');
 				} else {
-					const resDeactivate = await fetch(`${PUBLIC_API_URL}/providers/${editingProvider.id}`, {
-						method: 'DELETE',
-						headers: { Authorization: `Bearer ${token}` }
+					const resDeactivate = await api(`/providers/${editingProvider.id}`, {
+						method: 'DELETE'
 					});
 					if (!resDeactivate.ok) throw new Error('Falha ao desativar');
 				}
@@ -162,7 +131,6 @@
 			providers = providers.map((p) =>
 				p.id === editingProvider!.id ? { ...p, name: newProviderName, active: isProviderActive } : p
 			);
-
 			ToastService.success('Provedora atualizada com sucesso!');
 			showCreateModal = false;
 		} catch (error) {
@@ -224,12 +192,10 @@
 		<div class="flex gap-3">
 			<button
 				onclick={() => (sortBy = 'name')}
-				class="
-          min-w-140px flex items-center justify-between gap-3 rounded-xl border px-5 py-3.5 text-sm font-bold transition-all active:scale-95
-          {sortBy === 'name'
+				class="min-w-140px flex items-center justify-between gap-3 rounded-xl border px-5 py-3.5 text-sm font-bold transition-all active:scale-95 {sortBy ===
+				'name'
 					? 'bg-hunt-purple-500/20 border-hunt-purple-500 text-hunt-purple-300 shadow-hunt-purple-500/10 shadow-lg'
-					: 'bg-hunt-dark-400 border-hunt-light-900/10 text-hunt-light-300 hover:bg-hunt-dark-300'}
-        "
+					: 'bg-hunt-dark-400 border-hunt-light-900/10 text-hunt-light-300 hover:bg-hunt-dark-300'}"
 			>
 				Ordem: A-Z
 				<ChevronDown
@@ -242,12 +208,10 @@
 
 			<button
 				onclick={() => (sortBy = 'count')}
-				class="
-          min-w-160px flex items-center justify-between gap-3 rounded-xl border px-5 py-3.5 text-sm font-bold transition-all active:scale-95
-          {sortBy === 'count'
+				class="min-w-160px flex items-center justify-between gap-3 rounded-xl border px-5 py-3.5 text-sm font-bold transition-all active:scale-95 {sortBy ===
+				'count'
 					? 'bg-hunt-purple-500/20 border-hunt-purple-500 text-hunt-purple-300 shadow-hunt-purple-500/10 shadow-lg'
-					: 'bg-hunt-dark-400 border-hunt-light-900/10 text-hunt-light-300 hover:bg-hunt-dark-300'}
-        "
+					: 'bg-hunt-dark-400 border-hunt-light-900/10 text-hunt-light-300 hover:bg-hunt-dark-300'}"
 			>
 				Mais Jogados
 				<ChevronDown
@@ -260,12 +224,7 @@
 		</div>
 	</div>
 
-	{#if isLoading}
-		<div class="flex h-64 w-full flex-col items-center justify-center gap-4">
-			<LoaderCircle class="text-hunt-purple-500 h-10 w-10 animate-spin" />
-			<p class="text-hunt-light-600 animate-pulse font-bold">Carregando provedoras...</p>
-		</div>
-	{:else if filteredProviders.length === 0}
+	{#if filteredProviders.length === 0}
 		<div
 			in:fade={{ duration: 200 }}
 			class="border-hunt-light-900/10 bg-hunt-dark-400/10 flex h-64 w-full flex-col items-center justify-center gap-2 rounded-2xl border border-dashed"
@@ -280,11 +239,9 @@
 					onclick={() => openEditModal(provider)}
 					animate:flip={{ duration: 300 }}
 					in:fade={{ duration: 200 }}
-					class="
-            bg-hunt-dark-400/20 border-hunt-light-900/10 hover:border-hunt-purple-500/50 hover:bg-hunt-dark-400/40 hover:shadow-hunt-purple-500/10
-            group relative flex aspect-square flex-col items-center justify-center gap-3 rounded-2xl border p-4 text-center transition-all duration-300 hover:-translate-y-1 hover:shadow-xl active:scale-95
-            {provider.active ? '' : 'opacity-60 grayscale'} 
-          "
+					class="bg-hunt-dark-400/20 border-hunt-light-900/10 hover:border-hunt-purple-500/50 hover:bg-hunt-dark-400/40 hover:shadow-hunt-purple-500/10 group relative flex aspect-square flex-col items-center justify-center gap-3 rounded-2xl border p-4 text-center transition-all duration-300 hover:-translate-y-1 hover:shadow-xl active:scale-95 {provider.active
+						? ''
+						: 'opacity-60 grayscale'}"
 				>
 					{#if !provider.active}
 						<div

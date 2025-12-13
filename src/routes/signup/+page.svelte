@@ -1,81 +1,50 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { PUBLIC_API_URL } from '$env/static/public';
-	import ValidateInput from '$lib/components/forms/ValidateInput.svelte';
-	import { validateEmail, validatePassword } from '$lib/utils/Validators';
+	import { api } from '$lib/services/api';
+	import { superForm, defaults } from 'sveltekit-superforms';
+	import { zod } from 'sveltekit-superforms/adapters';
+	import { registerSchema } from '$lib/schemas/auth';
+	import Input from '$lib/components/forms/Input.svelte';
 	import { User, Mail, Lock, CircleAlert, ArrowRight } from 'lucide-svelte';
 
-	let username = $state('');
-	let email = $state('');
-	let password = $state('');
-	let confirmPassword = $state('');
-
-	let usernameError = $state('');
-	let emailError = $state('');
-	let passwordError = $state('');
-	let confirmPasswordError = $state('');
+	const { form, errors, constraints, enhance } = superForm(
+		defaults({ username: '', email: '', password: '', confirmPassword: '' }, zod(registerSchema)),
+		{
+			SPA: true,
+			validators: zod(registerSchema),
+			onUpdate: async ({ form: f }) => {
+				if (f.valid) {
+					await handleSignup(f.data);
+				}
+			}
+		}
+	);
 
 	let errorMessage = $state('');
 	let isSubmitting = $state(false);
 
-	const validateUsername = (val: string) => val.trim().length >= 3;
-
-	async function handleSignup(event: Event) {
-		event.preventDefault();
-
+	async function handleSignup(data: typeof $form) {
 		errorMessage = '';
-		usernameError = '';
-		emailError = '';
-		passwordError = '';
-		confirmPasswordError = '';
-
-		// 2. Validações Locais
-		let hasError = false;
-
-		if (!validateUsername(username)) {
-			usernameError = 'Mínimo de 3 caracteres';
-			hasError = true;
-		}
-
-		if (!validateEmail(email)) {
-			emailError = 'E-mail inválido';
-			hasError = true;
-		}
-
-		if (!validatePassword(password)) {
-			passwordError = 'Mínimo de 6 caracteres';
-			hasError = true;
-		}
-
-		// Validação especial: Comparar senhas
-		if (password !== confirmPassword) {
-			confirmPasswordError = 'As senhas não coincidem';
-			hasError = true;
-		}
-
-		if (hasError) return;
-
-		// 3. Envio para API
 		isSubmitting = true;
 
+		const { confirmPassword, ...submitData } = data;
+
 		try {
-			const response = await fetch(`${PUBLIC_API_URL}/auth/signup`, {
+			const payload = { ...submitData, userName: submitData.username };
+			const response = await api('/auth/signup', {
 				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ userName: username, email, password })
+				body: JSON.stringify(payload)
 			});
 
-			const data = await response.json();
+			const resData = await response.json();
 
 			if (!response.ok) {
-				// Tratamento específico para conflitos (409)
 				if (response.status === 409) {
 					throw new Error('Este e-mail ou usuário já está em uso.');
 				}
-				throw new Error(data.message || 'Erro ao criar conta.');
+				throw new Error(resData.message || 'Erro ao criar conta.');
 			}
 
-			// Sucesso! Redireciona para o login com flag de sucesso
 			goto('/signin?registered=true');
 		} catch (error: any) {
 			console.error('Erro no cadastro:', error);
@@ -112,68 +81,66 @@
 		</div>
 
 		<div class="mt-10 sm:mx-auto sm:w-full sm:max-w-md">
-			<form class="space-y-5" onsubmit={handleSignup} autocomplete="off">
-				<ValidateInput
+			<form class="space-y-8" use:enhance method="POST" novalidate>
+				<Input
 					label="Nome de usuário"
 					name="username"
 					placeholder="Ex: BonusHunt"
 					autocomplete="username"
-					validate={validateUsername}
-					errorMessage="Mínimo de 3 caracteres"
-					bind:value={username}
-					bind:error={usernameError}
+					bind:value={$form.username}
+					error={$errors.username}
+					{...$constraints.username}
 				>
 					{#snippet icon()}
 						<User class="text-hunt-light-400 h-4 w-4" />
 					{/snippet}
-				</ValidateInput>
+				</Input>
 
-				<ValidateInput
+				<Input
 					label="Endereço de e-mail"
 					name="email"
 					type="email"
 					placeholder="email@exemplo.com"
 					autocomplete="email"
-					validate={validateEmail}
-					errorMessage="E-mail inválido"
-					bind:value={email}
-					bind:error={emailError}
+					bind:value={$form.email}
+					error={$errors.email}
+					{...$constraints.email}
 				>
 					{#snippet icon()}
 						<Mail class="text-hunt-light-400 h-4 w-4" />
 					{/snippet}
-				</ValidateInput>
+				</Input>
 
 				<div class="grid grid-cols-1 gap-5 md:grid-cols-2">
-					<ValidateInput
+					<Input
 						label="Senha"
 						name="password"
 						type="password"
 						placeholder="••••••"
 						autocomplete="new-password"
-						validate={validatePassword}
-						errorMessage="Mín. 6 caracteres"
-						bind:value={password}
-						bind:error={passwordError}
+						bind:value={$form.password}
+						error={$errors.password}
+						{...$constraints.password}
 					>
 						{#snippet icon()}
 							<Lock class="text-hunt-light-400 h-4 w-4" />
 						{/snippet}
-					</ValidateInput>
+					</Input>
 
-					<ValidateInput
+					<Input
 						label="Confirmar"
-						name="confirm-password"
+						name="confirmPassword"
 						type="password"
 						placeholder="••••••"
 						autocomplete="new-password"
-						bind:value={confirmPassword}
-						bind:error={confirmPasswordError}
+						bind:value={$form.confirmPassword}
+						error={$errors.confirmPassword}
+						{...$constraints.confirmPassword}
 					>
 						{#snippet icon()}
 							<Lock class="text-hunt-light-400 h-4 w-4" />
 						{/snippet}
-					</ValidateInput>
+					</Input>
 				</div>
 
 				{#if errorMessage}

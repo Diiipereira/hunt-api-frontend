@@ -8,7 +8,7 @@
 		Joystick,
 		Coins
 	} from 'lucide-svelte';
-	import { logout } from '$lib/stores/auth';
+	import { authState } from '$lib/stores/auth.svelte';
 	import { goto } from '$app/navigation';
 	import { UserStore } from '$lib/stores/user.store.svelte';
 
@@ -18,7 +18,7 @@
 	}
 
 	function handleLogout() {
-		logout();
+		authState.logout();
 		UserStore.clear();
 		goto('/signin');
 	}
@@ -68,7 +68,8 @@
 	<nav class="flex-1 space-y-2 py-6">
 		<a
 			href="/dashboard"
-			class="group text-md flex items-center gap-3 rounded-md px-3 py-2.5 font-bold transition-colors
+			class="group text-md flex items-center gap-3 rounded-md
+      px-3 py-2.5 font-bold transition-colors
       {page.url.pathname === '/dashboard'
 				? 'bg-hunt-purple-500 text-hunt-light-300'
 				: 'text-hunt-light-600 hover:text-hunt-light-300 hover:bg-hunt-dark-300/15'}

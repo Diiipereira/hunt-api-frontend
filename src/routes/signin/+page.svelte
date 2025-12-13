@@ -1,58 +1,43 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { PUBLIC_API_URL } from '$env/static/public';
-	import { login } from '$lib/stores/auth';
-	import ValidateInput from '$lib/components/forms/ValidateInput.svelte';
-	import { validateEmail, validatePassword } from '$lib/utils/Validators';
+	import { api } from '$lib/services/api';
+	import { authState } from '$lib/stores/auth.svelte';
+	import { superForm, defaults } from 'sveltekit-superforms';
+	import { zod } from 'sveltekit-superforms/adapters';
+	import { loginSchema } from '$lib/schemas/auth';
+	import Input from '$lib/components/forms/Input.svelte';
 	import { CircleAlert, Lock, Mail } from 'lucide-svelte';
 
-	let email = $state('');
-	let password = $state('');
+	const { form, errors, constraints, enhance } = superForm(
+		defaults({ email: '', password: '' }, zod(loginSchema)),
+		{
+			SPA: true,
+			validators: zod(loginSchema),
+			onUpdate: async ({ form: f }) => {
+				if (f.valid) await handleLogin(f.data);
+			}
+		}
+	);
 
-	let emailError = $state('');
-	let passwordError = $state('');
 	let loginError = $state('');
+	let isLoading = $state(false);
 
-	async function handleLogin(e: Event) {
-		e.preventDefault();
-
-		emailError = '';
-		passwordError = '';
+	async function handleLogin(data: typeof $form) {
 		loginError = '';
-
-		if (!email) {
-			emailError = 'O e-mail é obrigatório';
-		} else if (!validateEmail(email)) {
-			emailError = 'Por favor, informe um e-mail válido';
-		}
-
-		if (!password) {
-			passwordError = 'Por favor, digite sua senha';
-		} else if (!validatePassword(password)) {
-			passwordError = 'Senha deve ter pelo menos 6 caracteres';
-		}
-
-		if (emailError || passwordError) return;
-
+		isLoading = true;
 		try {
-			const res = await fetch(`${PUBLIC_API_URL}/auth/signin`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ email, password })
-			});
-
-			const data = await res.json();
-
+			const res = await api('/auth/signin', { method: 'POST', body: JSON.stringify(data) });
+			const responseData = await res.json();
 			if (!res.ok) {
-				loginError = 'E-mail ou senha incorretos. Tente novamente.';
+				loginError = 'E-mail ou senha incorretos.';
 				return;
 			}
-
-			login(data.accessToken);
+			authState.login(responseData.accessToken);
 			goto('/dashboard');
 		} catch (err) {
-			console.error(err);
-			loginError = 'Não foi possível conectar ao servidor.';
+			loginError = 'Erro de conexão.';
+		} finally {
+			isLoading = false;
 		}
 	}
 </script>
@@ -63,11 +48,9 @@
 	>
 		<div class="sm:mx-auto sm:w-full sm:max-w-sm">
 			<div class="bg-hunt-purple-500 mx-auto mb-6 h-10 w-10 rotate-45 rounded-sm"></div>
-
 			<h2 class="text-hunt-light-600 text-center text-2xl font-bold tracking-tight">
 				Faça login na sua conta
 			</h2>
-
 			<p class="text-hunt-light-300 mt-2 text-center text-sm">
 				Ou
 				<a
@@ -80,36 +63,34 @@
 		</div>
 
 		<div class="mt-10 sm:mx-auto sm:w-full sm:max-w-md">
-			<form class="space-y-6" onsubmit={handleLogin} autocomplete="off">
-				<ValidateInput
+			<form class="space-y-8" use:enhance method="POST" novalidate>
+				<Input
 					label="Endereço de e-mail"
 					name="email"
 					type="email"
 					placeholder="email@exemplo.com"
-					validate={validateEmail}
-					errorMessage="Por favor, informe um e-mail válido"
-					bind:value={email}
-					bind:error={emailError}
+					bind:value={$form.email}
+					error={$errors.email}
+					{...$constraints.email}
 				>
 					{#snippet icon()}
 						<Mail class="text-hunt-light-600 h-4 w-4" />
 					{/snippet}
-				</ValidateInput>
+				</Input>
 
-				<ValidateInput
+				<Input
 					label="Senha"
 					name="password"
 					type="password"
 					placeholder="••••••"
-					validate={validatePassword}
-					errorMessage="Senha deve ter pelo menos 6 caracteres"
-					bind:value={password}
-					bind:error={passwordError}
+					bind:value={$form.password}
+					error={$errors.password}
+					{...$constraints.password}
 				>
 					{#snippet icon()}
 						<Lock class="text-hunt-light-600 h-4 w-4" />
 					{/snippet}
-				</ValidateInput>
+				</Input>
 
 				{#if loginError}
 					<div
@@ -122,10 +103,10 @@
 
 				<button
 					type="submit"
-					class="bg-hunt-purple-500 hover:bg-hunt-purple-300 text-hunt-light-300 hover:text-hunt-light-500 shadow-hunt-purple-500/20 flex w-full
-          justify-center rounded-md px-6 py-2.5 text-sm font-bold transition-colors"
+					disabled={isLoading}
+					class="bg-hunt-purple-500 hover:bg-hunt-purple-300 text-hunt-light-300 hover:text-hunt-light-500 shadow-hunt-purple-500/20 flex w-full justify-center rounded-md px-6 py-2.5 text-sm font-bold transition-colors disabled:opacity-70"
 				>
-					Entrar
+					{isLoading ? 'Entrando...' : 'Entrar'}
 				</button>
 			</form>
 

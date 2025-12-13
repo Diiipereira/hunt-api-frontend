@@ -1,4 +1,4 @@
-import { PUBLIC_API_URL } from '$env/static/public';
+import { api } from '$lib/services/api';
 import { browser } from '$app/environment';
 
 interface User {
@@ -34,9 +34,8 @@ export class UserStore {
 
 	static async fetchUser() {
 		if (!browser) return;
-		const token = localStorage.getItem('token');
 
-		if (!token) {
+		if (!localStorage.getItem('token')) {
 			this.clear();
 			return;
 		}
@@ -46,9 +45,7 @@ export class UserStore {
 		}
 
 		try {
-			const response = await fetch(`${PUBLIC_API_URL}/users/me`, {
-				headers: { Authorization: `Bearer ${token}` }
-			});
+			const response = await api('/users/me');
 
 			if (response.ok) {
 				const data = await response.json();
@@ -62,10 +59,6 @@ export class UserStore {
 
 				user = userData;
 				localStorage.setItem('user_cache', JSON.stringify(userData));
-			} else {
-				if (response.status === 401) {
-					this.clear();
-				}
 			}
 		} catch (error) {
 			console.error('Erro ao buscar usuário:', error);

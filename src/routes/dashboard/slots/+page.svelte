@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { Search, Funnel, Heart, Dices, Plus, X, LoaderCircle } from 'lucide-svelte';
-	import { onMount } from 'svelte';
-	import { PUBLIC_API_URL } from '$env/static/public';
 	import { scale } from 'svelte/transition';
+
+	let { data } = $props();
 
 	interface Slot {
 		id: string | number;
@@ -15,38 +15,13 @@
 		slug?: string;
 	}
 
-	let slots = $state<Slot[]>([]);
-	let isLoading = $state(true);
+	let slots = $state<Slot[]>(data.slots);
+
+	let isLoading = $state(false);
 	let searchQuery = $state('');
 	let showFavoritesOnly = $state(false);
 
 	let selectedProvider = $state<string | null>(null);
-
-	onMount(async () => {
-		await fetchSlots();
-	});
-
-	async function fetchSlots() {
-		try {
-			const token = localStorage.getItem('token');
-			const response = await fetch(`${PUBLIC_API_URL}/slots`, {
-				method: 'GET',
-				headers: {
-					Authorization: `Bearer ${token}`,
-					'Content-Type': 'application/json'
-				}
-			});
-
-			if (!response.ok) throw new Error('Falha ao buscar slots');
-
-			const data = await response.json();
-			slots = Array.isArray(data) ? data : data.data || [];
-		} catch (error) {
-			console.error('Erro ao carregar slots:', error);
-		} finally {
-			isLoading = false;
-		}
-	}
 
 	let filteredSlots = $derived(
 		slots.filter((slot) => {
@@ -157,12 +132,7 @@
 		</div>
 	</div>
 
-	{#if isLoading}
-		<div class="flex h-64 w-full flex-col items-center justify-center gap-4">
-			<LoaderCircle class="text-hunt-purple-500 h-10 w-10 animate-spin" />
-			<p class="text-hunt-light-600 animate-pulse font-bold">Carregando slots...</p>
-		</div>
-	{:else if filteredSlots.length === 0}
+	{#if filteredSlots.length === 0}
 		<div
 			in:scale={{ duration: 200, start: 0.95 }}
 			class="border-hunt-light-900/10 bg-hunt-dark-400/10 flex h-64 w-full flex-col items-center justify-center gap-2 rounded-2xl border border-dashed"
@@ -175,10 +145,7 @@
 			{#each filteredSlots as slot (slot.id)}
 				<div
 					in:scale={{ duration: 200, start: 0.95 }}
-					class="
-            bg-hunt-dark-400/20 border-hunt-light-900/10 hover:border-hunt-purple-500/50 hover:bg-hunt-dark-400/40 hover:shadow-hunt-purple-500/10
-            group relative flex aspect-4/3 flex-col justify-between rounded-xl border p-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl
-          "
+					class="bg-hunt-dark-400/20 border-hunt-light-900/10 hover:border-hunt-purple-500/50 hover:bg-hunt-dark-400/40 hover:shadow-hunt-purple-500/10 group relative flex aspect-4/3 flex-col justify-between rounded-xl border p-4 transition-all duration-300 hover:-translate-y-1 hover:shadow-xl"
 				>
 					<div class="relative z-10 flex justify-end">
 						<button

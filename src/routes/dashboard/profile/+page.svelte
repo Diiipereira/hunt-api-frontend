@@ -1,21 +1,24 @@
 <script lang="ts">
-	import { PUBLIC_API_URL } from '$env/static/public';
 	import { CircleUserRound, Camera, LoaderCircle, Upload } from 'lucide-svelte';
-	import { onMount } from 'svelte';
-
+	import { api } from '$lib/services/api';
 	import AvatarCropper from '$lib/components/AvatarCropper.svelte';
-	import ValidateInput from '$lib/components/forms/ValidateInput.svelte';
-
+	import ValidateInput from '$lib/components/forms/Input.svelte';
 	import { ToastService } from '$lib/stores/toast.svelte';
 	import { ProfileService } from '$lib/services/profile.service';
 	import { UserStore } from '$lib/stores/user.store.svelte';
 
-	let username = $state('');
-	let email = $state('');
-	let avatarUrl = $state('');
-	let userId = $state('');
+	let { data } = $props();
 
-	// Senhas
+	let userProfile = data.profile || {};
+
+	let username = $state(userProfile.username || userProfile.userName || '');
+	let email = $state(userProfile.email || '');
+	let userId = $state(userProfile.id || '');
+
+	let apiAvatar = userProfile.avatar || '';
+	let storeAvatar = UserStore.data?.avatar || '';
+	let avatarUrl = $state(storeAvatar.split('?')[0] === apiAvatar ? storeAvatar : apiAvatar);
+
 	let currentPassword = $state('');
 	let newPassword = $state('');
 	let confirmPassword = $state('');
@@ -26,51 +29,16 @@
 		confirm: ''
 	});
 
-	// Estados
 	let isSaving = $state(false);
 	let showCropper = $state(false);
 	let selectedImageSrc = $state<string | null>(null);
 	let fileInputRef = $state<HTMLInputElement | null>(null);
 	let isUploading = $state(false);
 
-	// Validações
 	const validateRequired = (v: string) => v.length > 0;
 	const validateLength = (v: string) => v.length >= 6;
 	const validateMatch = (v: string) => v === newPassword;
 
-	onMount(async () => {
-		await fetchProfile();
-	});
-
-	async function fetchProfile() {
-		try {
-			const token = localStorage.getItem('token');
-			const response = await fetch(`${PUBLIC_API_URL}/users/me`, {
-				headers: { Authorization: `Bearer ${token}` }
-			});
-
-			if (!response.ok) throw new Error('Erro ao buscar perfil');
-
-			const data = await response.json();
-
-			username = data.username || data.userName || '';
-			email = data.email || '';
-			userId = data.id;
-
-			const apiAvatar = data.avatar || '';
-			const storeAvatar = UserStore.data?.avatar || '';
-
-			if (storeAvatar.split('?')[0] === apiAvatar) {
-				avatarUrl = storeAvatar;
-			} else {
-				avatarUrl = apiAvatar;
-			}
-		} catch (error) {
-			console.error('Erro ao carregar perfil:', error);
-		}
-	}
-
-	// --- LÓGICA DE UPLOAD ---
 	function triggerFileInput() {
 		fileInputRef?.click();
 	}
@@ -104,22 +72,17 @@
 		isUploading = true;
 
 		try {
-			const token = localStorage.getItem('token');
 			const formData = new FormData();
 			formData.append('avatar', blob, 'avatar.jpg');
 
 			await new Promise((resolve) => setTimeout(resolve, 1000));
 
-			const response = await fetch(`${PUBLIC_API_URL}/users/me/avatar`, {
+			const response = await api('/users/me/avatar', {
 				method: 'PATCH',
-				headers: {
-					Authorization: `Bearer ${token}`
-				},
 				body: formData
 			});
 
 			if (!response.ok) throw new Error('Falha no upload');
-
 			const data = await response.json();
 
 			if (data.avatar) {
@@ -144,25 +107,21 @@
 		if (fileInputRef) fileInputRef.value = '';
 	}
 
-	// --- LÓGICA DE SENHA ---
 	async function handleSave() {
 		const error = ProfileService.validatePasswordChange({
 			current: currentPassword,
 			newPass: newPassword,
 			confirm: confirmPassword
 		});
-
 		if (error) {
 			ToastService.warning(error);
 			return;
 		}
 
 		isSaving = true;
-		const token = localStorage.getItem('token') || '';
 
 		try {
-			await ProfileService.updatePassword(token, currentPassword, newPassword);
-
+			await ProfileService.updatePassword(currentPassword, newPassword);
 			ToastService.success('Sua senha foi alterada com sucesso!');
 
 			currentPassword = '';
@@ -303,7 +262,6 @@
 			<div class="grid grid-cols-1 gap-6 md:grid-cols-2">
 				<div class="group relative">
 					<ValidateInput label="Usuário" name="username" value={username} disabled={true} />
-
 					<div
 						class="bg-hunt-purple-400 text-hunt-light-300 pointer-events-none absolute -top-10 left-1/2 z-20 -translate-x-[50%] rounded-md px-3 py-2 text-xs font-bold whitespace-nowrap opacity-0 shadow-lg transition-all duration-500 ease-out group-hover:translate-y-2 group-hover:opacity-100"
 					>
@@ -316,7 +274,6 @@
 
 				<div class="group relative">
 					<ValidateInput label="Endereço de E-mail" name="email" value={email} disabled={true} />
-
 					<div
 						class="bg-hunt-purple-400 text-hunt-light-300 pointer-events-none absolute -top-10 left-1/2 z-20 -translate-x-[50%] rounded-md px-3 py-2 text-xs font-bold whitespace-nowrap opacity-0 shadow-lg transition-all duration-500 ease-out group-hover:translate-y-2 group-hover:opacity-100"
 					>
